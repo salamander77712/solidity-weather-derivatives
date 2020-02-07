@@ -1,0 +1,68 @@
+pragma solidity >=0.5.0 <0.6.0;
+import "./ownable.sol";
+
+contract WeatherDerivative is Ownable{
+    
+    event newDerivative(uint id, uint endDate, uint payment, uint payout, string weatherType, uint8 lat, uint16 long);
+    event derivativeBought(uint derivativeId);
+    event derivativeCancelled(uint derivativeId);
+    
+    uint platformFee = 1;
+    
+    struct Derivative{
+        uint32 endDate;
+        uint payment;
+        uint payout;
+        uint8 lat;
+        uint16 long;
+        string weatherType;
+        address payable insured;
+        address payable insurer;
+        bool completed;
+    }
+    
+    Derivative[] public derivatives;// array to store derivaties
+    
+    function createDerivativeExact(string memory weatherType, uint8 lat, uint16 long, uint payment, uint payout, uint32 endDate) public payable {
+        require(msg.value == payment); // make sure that payment will be paid
+        uint insuredId = derivatives.push(Derivative(endDate, payment, payout, lat, long, weatherType, msg.sender, owner(), false)) - 1;// create derivative and add id to array
+        emit newDerivative(insuredId, endDate, payment, payout, weatherType, lat, long);
+    }
+    
+    function buyDerivativeInsured(uint derivativeId) public payable{
+        require(msg.value == derivatives[derivativeId].payout - derivatives[derivativeId].payment);// make sure payout will be paid
+        require(derivatives[derivativeId].insurer == owner());// make sure no one else already bought derivative
+        derivatives[derivativeId].insurer = msg.sender;// map derivative to sender
+        emit derivativeBought(derivativeId);
+    }
+    
+    function actualWeather(uint derivativeId) internal returns(string memory){
+        //gay shit
+    }
+    
+    function completeDerivative(uint derivativeId) public{
+        require(derivatives[derivativeId].endDate > now);
+        require(derivatives[derivativeId].completed == false);
+        require(derivatives[derivativeId].insurer != owner());
+        if(keccak256(abi.encode(actualWeather(derivativeId))) == keccak256(abi.encode(derivatives[derivativeId].weatherType))){
+            address payable insured = derivatives[derivativeId].insured;
+            insured.transfer(derivatives[derivativeId].payout * (1 - platformFee / 10000));
+        }
+        else{
+            address payable insurer = derivatives[derivativeId].insurer;
+            insurer.transfer(derivatives[derivativeId].payout * (1 - platformFee / 10000));
+        }
+        derivatives[derivativeId].completed = true;
+        address payable _owner = owner();
+        _owner.transfer(derivatives[derivativeId].payout * platformFee / 10000);
+    }
+    
+    function cancelUnfullfilledDerivative(uint derivativeId) public{
+        require(derivatives[derivativeId].insurer == owner()); // make sure derivative is not fullfilled
+        require(derivatives[derivativeId].completed == false); //make sure contract wasn't completed
+        address payable insured = derivatives[derivativeId].insured;
+        insured.transfer(derivatives[derivativeId].payment);// send money back to insured
+        derivatives[derivativeId].completed = true;
+        emit derivativeCancelled(derivativeId);
+    }
+}
