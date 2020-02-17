@@ -37,7 +37,7 @@ contract WeatherDerivative is Ownable{
     }
     
     function actualWeather(uint derivativeId) internal returns(string memory){
-        //gay shit
+        //oracle
     }
     
     function completeDerivative(uint derivativeId) public{
